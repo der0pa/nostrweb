@@ -1,0 +1,34 @@
+pipeline:
+  build:
+    image: node:18-alpine
+    commands:
+      - apk add --no-cache git
+      - npm ci
+      - npm run build
+  prepare_release:
+    when:
+      event: tag
+      tag: v*
+    image: node:18-slim
+    commands:
+      - tools/ci-make-release-targz.sh
+  create_release:
+    when:
+      event: tag
+      tag: v*
+    image: plugins/gitea-release
+    settings:
+      api_key:
+        from_secret: releaser_auth_token
+      base_url: https://git.qcode.ch
+      files: nostrweb.tar.gz
+      note: "automated release by ${CI_SYSTEM_HOST} \nbuild id: ${CI_BUILD_NUMBER}"
+  rsync_dist:
+    when:
+      event: tag
+      tag: v*
+    image: alpine:3.16.2
+    secrets: [releaser_ssh_key]
+    commands:
+      - apk add --no-cache --quiet openssh-client rsync
+      - tools/ci-rsync-release.sh
